@@ -1,0 +1,53 @@
+#!/bin/bash
+
+# Проверка на наличие репозитория Backports
+if ! grep -q "backports" /etc/apt/sources.list; then
+    echo "deb http://deb.debian.org/debian buster-backports main" >> /etc/apt/sources.list
+fi
+
+# Обновление пакетного менеджера
+apt-get update
+
+# Установка необходимых пакетов
+apt-get install -y apache2 python openssh-server vim git
+
+# Настройка SSH
+sed -i 's/#Port 22/Port 2222/' /etc/ssh/sshd_config
+systemctl enable ssh
+systemctl start ssh
+
+# Добавление пользователя
+useradd -m -s /bin/bash newuser
+echo "newuser:newpassword"|chpasswd
+
+# Создание директории для сайта
+mkdir /var/www/mysite
+
+# Настройка Apache2
+cat <<EOF > /etc/apache2/sites-enabled/mysite.conf
+<VirtualHost *:80>
+        ServerAdmin webmaster@localhost
+        DocumentRoot /var/www/mysite
+        ErrorLog ${APACHE_LOG_DIR}/error.log
+        CustomLog ${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>
+EOF
+
+# Перезапуск Apache
+systemctl restart apache2
+
+# Создание скрипта для резервного копирования базы данных
+cat <<EOF > /usr/local/bin/backup_db.sh
+#!/bin/bash
+mysqldump -u myuser -p mydatabase > /var/backups/mydatabase_$(date +%Y%m%d).sql
+EOF
+chmod +x /usr/local/bin/backup_db.sh
+
+# Создание файла index.html для сайта
+echo "<html><body><h1>Welcome to my site!</h1></body></html>" > /var/www/mysite/index.html
+
+# Настройка прав доступа
+chown -R newuser:newuser /var/www/mysite
+chmod -R 755 /var/www/mysite
+
+echo "Script executed successfully!"
